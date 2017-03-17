@@ -184,9 +184,6 @@ func _ready():
 	# Setting font of the text
 	if(FONT != null):
 		_label.add_font_override("font", FONT)
-	
-	# Setting size of the frame
-	# _label.set_size(Vector2(get_size().x,get_size().y))
 
 	_label.set_custom_minimum_size(get_size())
 	_label.set_scroll_follow(true)
