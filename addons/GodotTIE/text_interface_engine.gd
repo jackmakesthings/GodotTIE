@@ -59,12 +59,31 @@ func buff_debug(f, lab = false, arg0 = null, push_front = false):
 
 # Standard text printing, at a given speed
 # Not sure what 'tag' does yet...
-func buff_text(text, vel = 0, tag = "", push_front = false):
+func buff_text(text, vel = 0, wraps=[], tag = "", push_front = false):
+
+	var a = null
 	var b = {"buff_type":BUFF_TEXT, "buff_text":text, "buff_vel":vel, "buff_tag":tag}
+	var c = null
+
+	if !wraps.empty():
+		a = {"buff_type":BUFF_TEXT, "buff_text": wraps[0], "buff_vel":0, "buff_tag":tag}
+		c = {"buff_type":BUFF_TEXT, "buff_text": wraps[1], "buff_vel":0, "buff_tag":tag}
+
 	if !push_front:
-		_buffer.append(b)
+		if a != null:
+			_buffer.append(a)
+			_buffer.append(b)
+			_buffer.append(c)
+		else:
+			_buffer.append(b)
+
 	else:
-		_buffer.push_front(b)
+		if a != null:
+			_buffer.push_front(c)
+			_buffer.push_front(b)
+			_buffer.push_front(a)
+		else:
+			_buffer.push_front(b)
 
 
 # ...
@@ -172,6 +191,7 @@ func _ready():
 	_label.set_custom_minimum_size(get_size())
 	_label.set_scroll_follow(true)
 	_label.get_v_scroll().set_opacity(0.0)
+	_label.set_use_bbcode(true)
 
 	set('size_flags/vertical', 3)
 	set('size_flags/horizontal', 3)
@@ -218,7 +238,7 @@ func _fixed_process(delta):
 		# Mode 1: Basic text printing
 		elif (o["buff_type"] == BUFF_TEXT):
 
-			# Maybe buff_tag is for bbcode tags...
+			# I guess buff tags are for triggering outside actions?
 			if(o["buff_tag"] != "" and _buff_beginning == true):
 				emit_signal("tag_buff", o["buff_tag"])
 			

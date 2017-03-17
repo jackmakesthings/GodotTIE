@@ -2,29 +2,55 @@ extends Control
 
 onready var tie = get_node("panel/text_interface_engine")
 
+# two ways of injecting bbcode - either as "wraps" array 
+# like ["[color=red]", "[/color]"] (expects two bbcode strings)
+# or as a standalone line with speed set to 0.
+
+func type_demo():
+
+	var demo =[
+	{"text": "", "speed": 0.1},
+	{"text": "Chi", "speed": 0},
+	{"text": "", "speed": 0.2},
+	{"text": "ke", "speed": 0},
+	{"text": "", "speed": 0.1},
+	{"text": "ty", "speed": 0},
+	{"text": "", "speed": 0.1},
+	{"text": " Chi", "speed": 0},
+	{"text": "", "speed": 0.4},
+	{"text": "na", "speed": 0},
+	{"text": "", "speed": 0.4},
+	{"text": " the ", "speed": 0},
+	{"text": "", "speed": 0.1},
+	{"text": "[color=aqua]Chi", "speed": 0},
+	{"text": "", "speed": 0.4},
+	{"text": "nese ", "speed": 0},
+	{"text": "", "speed": 0.4},
+	{"text": "chi", "speed": 0},
+	{"text": "", "speed": 0.1},
+	{"text": "cken[/color]", "speed": 0},
+	]
+
+	var i
+	
+	for i in range(0, demo.size()):
+		var demo_line = demo[i]
+			
+		if demo_line.text == "":
+			tie.buff_silence(demo_line.speed)
+		else:
+			if demo_line.has('wraps'):
+				tie.buff_text(demo_line.text, demo_line.speed, demo_line.wraps)
+			else:
+				tie.buff_text(demo_line.text, demo_line.speed)
+
+
+
 func select_demo(i):
 	tie.reset()
 	if(i == 1):
-		# "A Beautiful Song"
-		# by Henrique Alves
-		tie.set_color(Color(1,1,1))
-		# Buff text: "Text", duration (in seconds) of each letter
-		tie.buff_text("This is a song, ", 0.01)
-		tie.buff_text("lalala\n", 0.01)
-		# Buff silence: Duration of the silence (in seconds)
-		# tie.buff_silence(1)
-		tie.buff_text("It is so beautiful, ", 0.01)
-		tie.buff_text("lalala\n", 0.01)
-		# tie.buff_silence(1)
-		tie.buff_text("I love this song, ", 0.01)
-		tie.buff_text("lalala\n", 0.01)
-		# tie.buff_silence(1)
-		tie.buff_text("But now I'll ", 0.1) # WAIT FOR THE DROP
-		tie.buff_text("DROP", 0.01) # ?????
-		tie.buff_silence(0.4)
-		tie.buff_text(" THE BASS\n", 0.01) # !!!!!
-		tie.buff_silence(0.4)
-		tie.buff_text("TVUVTUVUTUVU WOODBODBOWBDODBO TUUVUTVU WODWVDOOWDV WODOWVOOWDVOWVD DUBDUBDUBUDUDB OWVDOWVWDOWVDOWVDOWVDWVDOWVDOWVODV", 0.04) # I firmly believe this particular verse is my Magna Opus.
+		type_demo()	
+
 	elif(i == 2):
 		tie.set_color(Color(1,1,0.3))
 		# If velocity is 0, than whole text is printed 
