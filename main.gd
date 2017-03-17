@@ -44,6 +44,7 @@ func _ready():
 	tie.connect("enter_break", self, "_on_enter_break")
 	tie.connect("resume_break", self, "_on_resume_break")
 	tie.connect("tag_buff", self, "_on_tag_buff")
+	tie.connect("size_change", self, "_on_size_change")
 	pass
 
 func _on_demos_list_item_selected( ID ):
@@ -55,6 +56,10 @@ func _on_buff_end():
 
 func _on_state_change(i):
 	print("New state: ", i)
+	pass
+
+func _on_size_change(size):
+	print("New height: ", size)
 	pass
 
 func _on_enter_break():

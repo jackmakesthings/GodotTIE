@@ -18,6 +18,7 @@ const BUFF_BREAK = 3
 onready var _buffer = [] # 0 = Debug; 1 = Text; 2 = Silence; 3 = Break
 onready var _label = RichTextLabel.new() # The Label in which the text is going to be displayed
 onready var _initial_size = get_size()
+onready var _current_size = get_size()
 onready var _state = 0 # 0 = Waiting; 1 = Output
 
 onready var _output_delay = 0
@@ -141,6 +142,16 @@ func set_turbomode(s):
 func set_break_key_by_scancode(i):
 	_break_key = i
 
+# Update the size of the container to avoid clipped lines
+# (Called when text is added)
+# The 30 is totally arbitrary; provides some padding. Should be >= one line height.
+func update_size():
+	var new_size = Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30)
+	if new_size.y != _current_size.y:
+		_current_size = new_size
+		_label.set_size(new_size)
+		set_size(new_size)
+		emit_signal("size_change", [_current_size.y])
 
 # ==============================================
 # Reserved methods
@@ -169,6 +180,7 @@ func _ready():
 	
 	add_user_signal("buff_end") # When there is no more outputs in _buffer
 	add_user_signal("state_change",[{"state":TYPE_INT}]) # When the state of the engine changes
+	add_user_signal("size_change", [TYPE_INT]) # When the height is updated to fit more text
 	add_user_signal("enter_break") # When the engine stops on a break
 	add_user_signal("resume_break") # When the engine resumes from a break
 	add_user_signal("tag_buff",[{"tag":TYPE_STRING}]) # When the _buffer reaches a buff which is tagged
@@ -181,10 +193,7 @@ func _fixed_process(delta):
 		# Well, not if the buffer's empty.
 		if(_buffer.size() == 0):
 			set_state(STATE_WAITING)
-
-			_label.set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
-			set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
-			
+			update_size()
 			emit_signal("buff_end")
 			return
 		
@@ -284,7 +293,5 @@ func _fixed_process(delta):
 # And here's the thing that actually puts text in the box!
 func _label_print(t): # Add text to the label
 	_label.set_bbcode(_label.get_bbcode() + t)
-
-	_label.set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
-	set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
+	update_size()
 	return t
