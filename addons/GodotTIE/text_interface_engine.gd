@@ -1,16 +1,21 @@
-#MADE BY HENRIQUE ALVES
-#LICENSE STUFF BLABLABLA
-#(MIT License)
+# MADE BY HENRIQUE ALVES
+# LICENSE STUFF BLABLABLA
+# (MIT License)
+# Tweaked by @jackmakesthings
 
-# Intern initializations
-extends ReferenceFrame # Extends from ReferenceFrame
 
-const _ARRAY_CHARS = [" ","!","\"","#","$","%","&","'","(",")","*","+",",","-",".","/","0","1","2","3","4","5","6","7","8","9",":",";","<","=",">","?","@","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","[","\\","]","^","_","`","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","{","|","}","~"]
+extends ReferenceFrame
+# TODO: is this the best thing to extend from?
 
+const _ARRAY_CHARS = [" ","!","\"","#","$","%","&","'","(",")","*","+",",","-",".","/","0","1","2","3","4","5","6","7","8","9",":",";","<","=",">","?","@","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","[","","]","^","_","`","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","{","|","}","~"]
+# TODO: this seems super gnarly, surely there is a better way to type text...
+
+# [INPUT]
 const STATE_WAITING = 0
 const STATE_OUTPUT = 1
 const STATE_INPUT = 2
 
+# [INPUT]
 const BUFF_DEBUG = 0
 const BUFF_TEXT = 1
 const BUFF_SILENCE = 2
@@ -18,18 +23,17 @@ const BUFF_BREAK = 3
 const BUFF_INPUT = 4
 
 onready var _buffer = [] # 0 = Debug; 1 = Text; 2 = Silence; 3 = Break; 4 = Input
-onready var _label = Label.new() # The Label in which the text is going to be displayed
+onready var _label = RichTextLabel.new() # The Label in which the text is going to be displayed
 onready var _state = 0 # 0 = Waiting; 1 = Output; 2 = Input
 
 onready var _output_delay = 0
 onready var _output_delay_limit = 0
 onready var _on_break = false
-onready var _max_lines_reached = false
 onready var _buff_beginning = true
 onready var _turbo = false
-onready var _max_lines = 0
 onready var _break_key = KEY_RETURN
 
+# [INPUT]
 onready var _blink_input_visible = false
 onready var _blink_input_timer = 0
 onready var _input_timer_limit = 1
@@ -37,58 +41,97 @@ onready var _input_index = 0
 
 # =============================================== 
 # Text display properties!
-export(bool) var SCROLL_ON_MAX_LINES = true # If this is true, the text buffer update will stop after reaching the maximum number of lines; else, it will stop to wait for user input, and than clear the text.
-export(bool) var BREAK_ON_MAX_LINES = true # If the text output pauses waiting for the user when reaching the maximum number of lines
-export(bool) var AUTO_SKIP_WORDS = true # If words that dont fit the line only start to be printed on next line
-export(bool) var LOG_SKIPPED_LINES = true # false = delete every line that is not showing on screen
-export(bool) var SCROLL_SKIPPED_LINES = false # if the user will be able to scroll through the skipped lines; weird stuff can happen if this and BREAK_ON_MAX_LINE/LOG_SKIPPED_LINES
 export(Font) var FONT
+
+# [INPUT]
 # Text input properties!
 export(bool) var PRINT_INPUT = true # If the input is going to be printed
 export(bool) var BLINKING_INPUT = true # If there is a _ blinking when input is appropriate
 export(int) var INPUT_CHARACTERS_LIMIT = -1 # If -1, there'll be no limits in the number of characters
 # ===============================================
 
-func buff_debug(f, lab = false, arg0 = null, push_front = false): # For simple debug purposes; use with care
+
+# Get the current contents
+func get_bbcode():
+	return _label.get_bbcode()
+
+# Changes the state of the Text Interface Engine
+func set_state(i): 
+	emit_signal("state_change", int(i))
+	if _state == STATE_INPUT:
+		_blink_input(true)
+	_state = i
+	if(i == 2): # Set input index to last character on the label
+		_input_index = _label.get_bbcode().length()
+
+
+###
+# Buffer operations - these push different types of output to the interface
+###
+
+# Debug-style output
+func buff_debug(f, lab = false, arg0 = null, push_front = false):
 	var b = {"buff_type":BUFF_DEBUG,"debug_function":f,"debug_label":lab,"debug_arg":arg0}
 	if(! push_front):
 		_buffer.append(b)
 	else:
 		_buffer.push_front(b)
 
-func buff_text(text, vel = 0, tag = "", push_front = false): # The text for the output, and its printing velocity (per character)
+
+# Standard text printing, at a given speed
+# Not sure what 'tag' does yet...
+func buff_text(text, vel = 0, tag = "", push_front = false):
 	var b = {"buff_type":BUFF_TEXT, "buff_text":text, "buff_vel":vel, "buff_tag":tag}
 	if !push_front:
 		_buffer.append(b)
 	else:
 		_buffer.push_front(b)
 
-func buff_silence(len, tag = "", push_front = false): # A duration without output
+
+# ...
+func buff_silence(len, tag = "", push_front = false):
 	var b = {"buff_type":BUFF_SILENCE, "buff_length":len, "buff_tag":tag}
 	if !push_front:
 		_buffer.append(b)
 	else:
 		_buffer.push_front(b)
 
-func buff_break(tag = "", push_front = false): # Stop output until the player hits enter
+
+# Stop output until the player hits a key (enter, by default)
+# Not currently in our designs but maybe this is useful...
+func buff_break(tag = "", push_front = false): 
 	var b = {"buff_type":BUFF_BREAK, "buff_tag":tag}
 	if !push_front:
 		_buffer.append(b)
 	else:
 		_buffer.push_front(b)
 
-func buff_input(tag = "", push_front = false): # 'Schedule' a change state to Input in the buffer
+
+# [INPUT]
+# Tell the buffer we're going to expect some text input 
+func buff_input(tag = "", push_front = false):
 	var b = {"buff_type":BUFF_INPUT, "buff_tag":tag}
 	if !push_front:
 		_buffer.append(b)
 	else:
 		_buffer.push_front(b)
 
-func clear_text(): # Deletes ALL the text on the label
-	_label.set_lines_skipped(0)
-	_label.set_text("")
 
-func clear_buffer(): # Clears all buffs in _buffer
+# Shorthand for adding a line break to the text
+func add_newline():
+	_label_print("\n")
+
+
+###
+# Cleanup functions and resets
+###
+
+# Deletes ALL the text on the label
+func clear_text(): 
+	_label.set_bbcode("")
+
+# Clears all buffs in _buffer, including delays and settings
+func clear_buffer(): 
 	_on_break = false
 	set_state(STATE_WAITING)
 	_buffer.clear()
@@ -97,52 +140,44 @@ func clear_buffer(): # Clears all buffs in _buffer
 	_output_delay_limit = 0
 	_buff_beginning = true
 	_turbo = false
-	_max_lines_reached = false
 
-func reset(): # Reset TIE to its initial 100% cleared state
+# Reset TIE to its initial 100% cleared state
+func reset():
 	clear_text()
 	clear_buffer()
 
-func clear_skipped_lines(): # Deletes only the 'hidden' lines, if LOG_SKIPPED_LINES is false
-	if(LOG_SKIPPED_LINES == true):
-		_clear_skipped_lines()
 
-func add_newline(): # Add a new line to the label text
-	_label_print("\n")
+###
+# On-the-fly interface changes;
+# (Might scrap these functions and let the bbcode do the work, ultimately.)
+###
 
-func get_text(): # Get current text on Label
-	return _label.get_text()
-
-func set_turbomode(s): # Print stuff in the maximum velocity and ignore breaks
-	_turbo = s;
-
-# Careful when changing fonts on-the-fly! It might break the text if there is something
-# already printed!
-func set_font_bypath(str_path): # Changes the font of the text; weird stuff will happen if you use this function after text has been printed
+# Changes the font of the text; 
+# weird stuff will happen if you use this function after text has been printed
+func set_font_bypath(str_path): 
 	_label.add_font_override("font",load(str_path))
-	_max_lines = floor(get_size().y/_label.get_line_height())
 
-func set_font_byresource(font): # Changes font of the text (uses the resource)
+# Changes font of the text (uses the resource)
+func set_font_byresource(font):
 	_label.add_font_override("font", font)
-	_max_lines = floor(get_size().y/_label.get_line_height())
 
-func set_color(c): # Changes the color of the text
+# Changes the color of the text
+func set_color(c): 
 	_label.add_color_override("font_color", c)
 
-func set_state(i): # Changes the state of the Text Interface Engine
-	emit_signal("state_change", int(i))
-	if _state == STATE_INPUT:
-		_blink_input(true)
-	_state = i
-	if(i == 2): # Set input index to last character on the label
-		_input_index = _label.get_text().length()
-
-func set_break_key_by_scancode(i): # Set a new key to resume breaks (uses scancode!)
-	_break_key = i
-
-func set_buff_speed(v): # Changes the velocity of the text being printed
+# Changes the velocity of the text being printed
+func set_buff_speed(v):
 	if (_buffer[0]["buff_type"] == BUFF_TEXT):
 		_buffer[0]["buff_vel"] = v
+
+# Print stuff in the maximum velocity and ignore breaks
+func set_turbomode(s):
+	_turbo = s;
+
+# Set a new key to resume breaks (uses scancode!)
+func set_break_key_by_scancode(i):
+	_break_key = i
+
 
 # ==============================================
 # Reserved methods
@@ -151,7 +186,6 @@ func set_buff_speed(v): # Changes the velocity of the text being printed
 func _ready():
 	set_fixed_process(true)
 	set_process_input(true)
-	
 	add_child(_label)
 	
 	# Setting font of the text
@@ -159,9 +193,7 @@ func _ready():
 		_label.add_font_override("font", FONT)
 	
 	# Setting size of the frame
-	_max_lines = floor(get_size().y/_label.get_line_height())
 	_label.set_size(Vector2(get_size().x,get_size().y))
-	_label.set_autowrap(true)
 	
 	add_user_signal("input_enter",[{"input":TYPE_STRING}]) # When user finished an input
 	add_user_signal("buff_end") # When there is no more outputs in _buffer
@@ -171,15 +203,30 @@ func _ready():
 	add_user_signal("tag_buff",[{"tag":TYPE_STRING}]) # When the _buffer reaches a buff which is tagged
 
 func _fixed_process(delta):
-	if(_state == STATE_OUTPUT): # Output
+
+	# Handle text inputs if that's the current state. 
+	# Might remove this functionality later.
+	if(_state == STATE_INPUT):
+		if BLINKING_INPUT:
+			_blink_input_timer += delta
+			if(_blink_input_timer > _input_timer_limit):
+				_blink_input_timer -= _input_timer_limit
+				_blink_input()
+
+	# If we're not inputting, are we outputting?
+	elif(_state == STATE_OUTPUT):
+
+		# Well, not if the buffer's empty.
 		if(_buffer.size() == 0):
 			set_state(STATE_WAITING)
 			emit_signal("buff_end")
 			return
 		
-		var o = _buffer[0] # Calling this var 'o' was one of my biggest mistakes during the development of this code. I'm sorry about this.
+		# But otherwise...
+		var o = _buffer[0] # TODO: rename 'o' variable
 		
-		if (o["buff_type"] == BUFF_DEBUG): # ---- It's a debug! ----
+		# Mode 0: Debug. Supports func calls?
+		if (o["buff_type"] == BUFF_DEBUG):
 			if(o["debug_label"] == false):
 				if(o["debug_arg"] == null):
 					print(self.call(o["debug_function"]))
@@ -191,123 +238,140 @@ func _fixed_process(delta):
 				else:
 					print(_label.call(o["debug_function"],o["debug_arg"]))
 			_buffer.pop_front()
-		elif (o["buff_type"] == BUFF_TEXT): # ---- It's a text! ----
-			# -- Print Text --
-			
+
+		########
+		# Mode 1: Basic text printing
+		elif (o["buff_type"] == BUFF_TEXT):
+
+			# Maybe buff_tag is for bbcode tags...
 			if(o["buff_tag"] != "" and _buff_beginning == true):
 				emit_signal("tag_buff", o["buff_tag"])
 			
-			if (_turbo): # In case of turbo, print everything on this buff
+			# Gotta go fast?
+			if (_turbo):
 				o["buff_vel"] = 0
 			
-			if(o["buff_vel"] == 0): # If the velocity is 0, than just print everything
-				while(o["buff_text"] != ""): # Not optimal (not really printing everything at the same time); but is the only way to work with line break
-					if(AUTO_SKIP_WORDS and (o["buff_text"][0] == " " or _buff_beginning)):
-						_skip_word()
+			# Printing everything at once
+			if(o["buff_vel"] == 0):
+				while(o["buff_text"] != ""):
 					_label_print(o["buff_text"][0])
 					_buff_beginning = false
 					o["buff_text"] = o["buff_text"].right(1)
-					if(_max_lines_reached == true):
-						break
-					
-			else: # Else, print each character according to velocity
+			
+			# Printing character by character		
+			else:
+
+				# Delay printing till enough time elapses (via delta)
 				_output_delay_limit = o["buff_vel"]
 				if(_buff_beginning):
 					_output_delay = _output_delay_limit + delta
 				else:
 					_output_delay += delta
+
+				# Once we've waited long enough, print the character
 				if(_output_delay > _output_delay_limit):
-					if(AUTO_SKIP_WORDS and (o["buff_text"][0] == " " or _buff_beginning)):
-						_skip_word()
 					_label_print(o["buff_text"][0])
 					_buff_beginning = false
 					_output_delay -= _output_delay_limit
 					o["buff_text"] = o["buff_text"].right(1)
-			# -- Popout Buff --
-			if (o["buff_text"] == ""): # This buff finished, so pop it out of the array
+	
+			# This buff finished, so pop it out of the array
+			if (o["buff_text"] == ""):
 				_buffer.pop_front()
 				_buff_beginning = true
 				_output_delay = 0
-		elif (o["buff_type"] == BUFF_SILENCE): # ---- It's a silence! ----
+
+		#####
+		# Mode 2: silences (pause for effect)
+		elif (o["buff_type"] == BUFF_SILENCE):
+
 			if(o["buff_tag"] != "" and _buff_beginning == true):
 				emit_signal("tag_buff", o["buff_tag"])
 				_buff_beginning = false
-			_output_delay_limit = o["buff_length"] # Length of the silence
+			_output_delay_limit = o["buff_length"]
 			_output_delay += delta
+
+			# Wait the specified time, then advance the buffer
 			if(_output_delay > _output_delay_limit):
 				_output_delay = 0
 				_buff_beginning = true
 				_buffer.pop_front()
-		elif (o["buff_type"] == BUFF_BREAK): # ---- It's a break! ----
+
+
+		#####
+		# Mode 3: Break, for pausing mid-output. Might be useful?
+		elif (o["buff_type"] == BUFF_BREAK):
+
 			if(o["buff_tag"] != "" and _buff_beginning == true):
 				emit_signal("tag_buff", o["buff_tag"])
 				_buff_beginning = false
-			if(_turbo): # Ignore this break
+
+			# No breaks in turbo mode	
+			if(_turbo):
 				_buffer.pop_front()
+
 			elif(!_on_break):
 				emit_signal("enter_break")
 				_on_break = true
-		elif (o["buff_type"] == BUFF_INPUT): # ---- It's an Input! ----
+
+
+		#####
+		# Mode 4: Input mode, prompts the user for text
+		# [INPUT]
+		elif (o["buff_type"] == BUFF_INPUT):
+
 			if(o["buff_tag"] != ""and _buff_beginning == true):
 				emit_signal("tag_buff", o["buff_tag"])
 				_buff_beginning = false
 			set_state(STATE_INPUT)
 			_buffer.pop_front()
-	elif(_state == STATE_INPUT):
-		if BLINKING_INPUT:
-			_blink_input_timer += delta
-			if(_blink_input_timer > _input_timer_limit):
-				_blink_input_timer -= _input_timer_limit
-				_blink_input()
-	
-	pass
 
+
+# [INPUT]
 func _input(event):
+
 	if(event.type == InputEvent.KEY and event.is_pressed() == true ):
-		if(SCROLL_SKIPPED_LINES and event.scancode == KEY_UP or event.scancode == KEY_DOWN): # User is just scrolling the text
-			if(event.scancode == KEY_UP):
-				if(_label.get_lines_skipped() > 0):
-					_label.set_lines_skipped(_label.get_lines_skipped()-1)
-			else:
-				if(_label.get_lines_skipped() < _label.get_line_count()-_max_lines):
-					_label.set_lines_skipped(_label.get_lines_skipped()+1)
-		elif(_state == 1 and _on_break): # If its on a break
+		# TODO: scroll key handler used to live here, should confirm it's not needed...
+
+		# If we're on a break, did the user just press the un-break key?
+		if(_state == 1 and _on_break):
 			if(event.scancode == _break_key):
 				emit_signal("resume_break")
 				_buffer.pop_front() # Pop out break buff
 				_on_break = false
-		elif(_state == 2): # If its on the input state
-			if(BLINKING_INPUT): # Stop blinking line while inputing
+
+		# If we're in the input state, stop flashing the cursor (if applicable)
+		elif(_state == 2):
+			if(BLINKING_INPUT):
 				_blink_input(true) 
 			
-			var input = _label.get_text().right(_input_index) # Get Input
+			var input = _label.get_bbcode().right(_input_index)
 			input = input.replace("\n","")
 
-			if(event.scancode == KEY_BACKSPACE): # Delete last character
+			# Backspace key means delete the last character
+			if(event.scancode == KEY_BACKSPACE): 
 				_delete_last_character(true)
-			elif(event.scancode == KEY_RETURN): # Finish input
+
+			# Enter key means they're done inputting
+			elif(event.scancode == KEY_RETURN):
 				emit_signal("input_enter", input)
-				if(!PRINT_INPUT): # Delete input
-					var i = _label.get_text().length() - _input_index
+
+				# Optionally, clear the input after it's been received
+				if(!PRINT_INPUT):
+					var i = _label.get_bbcode().length() - _input_index
 					while(i > 0):
 						_delete_last_character()
 						i-=1
 				set_state(STATE_OUTPUT)
 			
-			elif(event.unicode >= 32 and event.unicode <= 126): # Add character
+			# Any other key means type something
+			# TODO: this is so janky, needs to be reworked for sure
+			elif(event.unicode >= 32 and event.unicode <= 126):
 				if(INPUT_CHARACTERS_LIMIT < 0 or input.length() < INPUT_CHARACTERS_LIMIT):
 					_label_print(_ARRAY_CHARS[event.unicode-32])
 
-# Private
-func _clear_skipped_lines():
-	var i = 0
-	var n = 0
-	while i < _label.get_lines_skipped():
-		n = _label.get_text().findn("\n", n)+1
-		i+=1
-	_label.set_text(_label.get_text().right(n))
-	_label.set_lines_skipped(0)
-
+# [INPUT]
+# Flash the input cursor
 func _blink_input(reset = false):
 	if(reset == true):
 		if(_blink_input_visible):
@@ -322,75 +386,22 @@ func _blink_input(reset = false):
 		_blink_input_visible = true
 		_label_print("_")
 
+
+# [INPUT]
+# Used by the manual backspace handler, which is probably not staying
 func _delete_last_character(scrollup = false):
-	var n = _label.get_line_count()
-	_label.set_text(_label.get_text().left(_label.get_text().length()-1))
-	if( scrollup and n > _label.get_line_count() and _label.get_lines_skipped() > 0 and _blink_input_visible == false):
-		_label.set_lines_skipped(_label.get_lines_skipped()-1)
+	_label.set_bbcode(_label.get_bbcode().left(_label.get_bbcode().length()-1))
 
+
+# Not sure this is used any more...
 func _get_last_line():
-	var i = _label.get_text().rfind("\n")
+	var i = _label.get_bbcode().rfind("\n")
 	if (i == -1):
-		return _label.get_text()
-	return _label.get_text().substr(i,_label.get_text().length()-i)
+		return _label.get_bbcode()
+	return _label.get_bbcode().substr(i,_label.get_bbcode().length()-i)
 
-func _has_to_skip_word(word): # what an awful name
-	var ret = false
-	var n = _label.get_line_count()
-	_label.set_text(_label.get_text() + word)
-	if(_label.get_line_count() > n):
-		ret = true
-	_label.set_text(_label.get_text().left(_label.get_text().length()-word.length())) #omg
-	return ret
 
-func _skip_word():
-	var ot = _buffer[0]["buff_text"]
-	
-	# which comes first, a space or a new line (else, till the end)
-	var f_space = ot.findn(" ",1)
-	if f_space == -1:
-		f_space = ot.length()
-	var f_newline = ot.findn("\n",1)
-	if f_newline == -1:
-		f_newline = ot.length()
-	var len = min(f_space, f_newline)
-	
-	if(_has_to_skip_word(ot.substr(0,len))):
-		
-		if(_buffer[0]["buff_text"][0] == " "):
-			
-			_buffer[0]["buff_text"][0] = "\n"
-		else:
-			_buffer[0]["buff_text"] = _buffer[0]["buff_text"].insert(0,"\n")
-
+# And here's the thing that actually puts text in the box!
 func _label_print(t): # Add text to the label
-	var n = _label.get_line_count()
-	_label.set_text(_label.get_text() + t)
-	if(_label.get_line_count() > n): # If number of lines increased
-		if(_label.get_line_count()-_label.get_lines_skipped() > _max_lines): # If it exceeds _max_lines
-			# Check if it is a rogue blinking input
-			if(_blink_input_visible == true):
-				_blink_input(true)
-				return
-			
-			if(_state == 1 and BREAK_ON_MAX_LINES and _max_lines_reached == false): # Add a break when maximum lines are reached
-				_delete_last_character()
-				_max_lines_reached = true
-				_buffer[0]["buff_text"] = t + _buffer[0]["buff_text"]
-				buff_break("", true)
-				return t
-			
-			if(_max_lines_reached): # Reset maximum lines break
-				_max_lines_reached = false
-			
-			if(SCROLL_ON_MAX_LINES): # Scroll text, or clear everything
-				_label.set_lines_skipped(_label.get_lines_skipped()+1)
-			else:
-				_label.set_lines_skipped(_label.get_lines_skipped()+_max_lines)
-		
-		if (t != "\n" and n > 0): # Add a line breaker, so the engine will be able to get each line
-			_label.set_text(_label.get_text().insert( _label.get_text().length()-1,"\n"))
-		
-		if(LOG_SKIPPED_LINES == false): # Delete skipped lines
-			_clear_skipped_lines()
+	_label.set_bbcode(_label.get_bbcode() + t)
 	return t

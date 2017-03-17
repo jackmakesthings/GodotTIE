@@ -26,8 +26,8 @@ size_flags/horizontal = 2
 size_flags/vertical = 2
 margin/left = 314.0
 margin/top = 151.0
-margin/right = 684.0
-margin/bottom = 414.0
+margin/right = 681.0
+margin/bottom = 262.0
 
 [node name="text_interface_engine" type="ReferenceFrame" parent="panel"]
 
@@ -38,14 +38,9 @@ size_flags/vertical = 2
 margin/left = 3.0
 margin/top = 3.0
 margin/right = 367.0
-margin/bottom = 259.0
+margin/bottom = 107.0
 script/script = ExtResource( 2 )
 __meta__ = { "_editor_icon":ExtResource( 3 ) }
-SCROLL_ON_MAX_LINES = true
-BREAK_ON_MAX_LINES = true
-AUTO_SKIP_WORDS = true
-LOG_SKIPPED_LINES = true
-SCROLL_SKIPPED_LINES = false
 FONT = ExtResource( 4 )
 PRINT_INPUT = true
 BLINKING_INPUT = true
