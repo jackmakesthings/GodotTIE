@@ -7,24 +7,18 @@
 extends ReferenceFrame
 # TODO: is this the best thing to extend from?
 
-const _ARRAY_CHARS = [" ","!","\"","#","$","%","&","'","(",")","*","+",",","-",".","/","0","1","2","3","4","5","6","7","8","9",":",";","<","=",">","?","@","A","B","C","D","E","F","G","H","I","J","K","L","M","N","O","P","Q","R","S","T","U","V","W","X","Y","Z","[","","]","^","_","`","a","b","c","d","e","f","g","h","i","j","k","l","m","n","o","p","q","r","s","t","u","v","w","x","y","z","{","|","}","~"]
-# TODO: this seems super gnarly, surely there is a better way to type text...
-
-# [INPUT]
 const STATE_WAITING = 0
 const STATE_OUTPUT = 1
-const STATE_INPUT = 2
 
-# [INPUT]
 const BUFF_DEBUG = 0
 const BUFF_TEXT = 1
 const BUFF_SILENCE = 2
 const BUFF_BREAK = 3
-const BUFF_INPUT = 4
 
-onready var _buffer = [] # 0 = Debug; 1 = Text; 2 = Silence; 3 = Break; 4 = Input
+onready var _buffer = [] # 0 = Debug; 1 = Text; 2 = Silence; 3 = Break
 onready var _label = RichTextLabel.new() # The Label in which the text is going to be displayed
-onready var _state = 0 # 0 = Waiting; 1 = Output; 2 = Input
+onready var _initial_size = get_size()
+onready var _state = 0 # 0 = Waiting; 1 = Output
 
 onready var _output_delay = 0
 onready var _output_delay_limit = 0
@@ -33,21 +27,9 @@ onready var _buff_beginning = true
 onready var _turbo = false
 onready var _break_key = KEY_RETURN
 
-# [INPUT]
-onready var _blink_input_visible = false
-onready var _blink_input_timer = 0
-onready var _input_timer_limit = 1
-onready var _input_index = 0
-
 # =============================================== 
 # Text display properties!
 export(Font) var FONT
-
-# [INPUT]
-# Text input properties!
-export(bool) var PRINT_INPUT = true # If the input is going to be printed
-export(bool) var BLINKING_INPUT = true # If there is a _ blinking when input is appropriate
-export(int) var INPUT_CHARACTERS_LIMIT = -1 # If -1, there'll be no limits in the number of characters
 # ===============================================
 
 
@@ -58,11 +40,7 @@ func get_bbcode():
 # Changes the state of the Text Interface Engine
 func set_state(i): 
 	emit_signal("state_change", int(i))
-	if _state == STATE_INPUT:
-		_blink_input(true)
 	_state = i
-	if(i == 2): # Set input index to last character on the label
-		_input_index = _label.get_bbcode().length()
 
 
 ###
@@ -105,21 +83,6 @@ func buff_break(tag = "", push_front = false):
 		_buffer.append(b)
 	else:
 		_buffer.push_front(b)
-
-
-# [INPUT]
-# Tell the buffer we're going to expect some text input 
-func buff_input(tag = "", push_front = false):
-	var b = {"buff_type":BUFF_INPUT, "buff_tag":tag}
-	if !push_front:
-		_buffer.append(b)
-	else:
-		_buffer.push_front(b)
-
-
-# Shorthand for adding a line break to the text
-func add_newline():
-	_label_print("\n")
 
 
 ###
@@ -193,9 +156,17 @@ func _ready():
 		_label.add_font_override("font", FONT)
 	
 	# Setting size of the frame
-	_label.set_size(Vector2(get_size().x,get_size().y))
+	# _label.set_size(Vector2(get_size().x,get_size().y))
+
+	_label.set_custom_minimum_size(get_size())
+	_label.set_scroll_follow(true)
+	_label.get_v_scroll().set_opacity(0.0)
+
+	set('size_flags/vertical', 3)
+	set('size_flags/horizontal', 3)
+	_label.set('size_flags/vertical', 3)
+	_label.set('size_flags/horizontal', 3)
 	
-	add_user_signal("input_enter",[{"input":TYPE_STRING}]) # When user finished an input
 	add_user_signal("buff_end") # When there is no more outputs in _buffer
 	add_user_signal("state_change",[{"state":TYPE_INT}]) # When the state of the engine changes
 	add_user_signal("enter_break") # When the engine stops on a break
@@ -204,21 +175,16 @@ func _ready():
 
 func _fixed_process(delta):
 
-	# Handle text inputs if that's the current state. 
-	# Might remove this functionality later.
-	if(_state == STATE_INPUT):
-		if BLINKING_INPUT:
-			_blink_input_timer += delta
-			if(_blink_input_timer > _input_timer_limit):
-				_blink_input_timer -= _input_timer_limit
-				_blink_input()
-
-	# If we're not inputting, are we outputting?
-	elif(_state == STATE_OUTPUT):
+	# Are we outputting?
+	if(_state == STATE_OUTPUT):
 
 		# Well, not if the buffer's empty.
 		if(_buffer.size() == 0):
 			set_state(STATE_WAITING)
+
+			_label.set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
+			set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
+			
 			emit_signal("buff_end")
 			return
 		
@@ -315,93 +281,10 @@ func _fixed_process(delta):
 				_on_break = true
 
 
-		#####
-		# Mode 4: Input mode, prompts the user for text
-		# [INPUT]
-		elif (o["buff_type"] == BUFF_INPUT):
-
-			if(o["buff_tag"] != ""and _buff_beginning == true):
-				emit_signal("tag_buff", o["buff_tag"])
-				_buff_beginning = false
-			set_state(STATE_INPUT)
-			_buffer.pop_front()
-
-
-# [INPUT]
-func _input(event):
-
-	if(event.type == InputEvent.KEY and event.is_pressed() == true ):
-		# TODO: scroll key handler used to live here, should confirm it's not needed...
-
-		# If we're on a break, did the user just press the un-break key?
-		if(_state == 1 and _on_break):
-			if(event.scancode == _break_key):
-				emit_signal("resume_break")
-				_buffer.pop_front() # Pop out break buff
-				_on_break = false
-
-		# If we're in the input state, stop flashing the cursor (if applicable)
-		elif(_state == 2):
-			if(BLINKING_INPUT):
-				_blink_input(true) 
-			
-			var input = _label.get_bbcode().right(_input_index)
-			input = input.replace("\n","")
-
-			# Backspace key means delete the last character
-			if(event.scancode == KEY_BACKSPACE): 
-				_delete_last_character(true)
-
-			# Enter key means they're done inputting
-			elif(event.scancode == KEY_RETURN):
-				emit_signal("input_enter", input)
-
-				# Optionally, clear the input after it's been received
-				if(!PRINT_INPUT):
-					var i = _label.get_bbcode().length() - _input_index
-					while(i > 0):
-						_delete_last_character()
-						i-=1
-				set_state(STATE_OUTPUT)
-			
-			# Any other key means type something
-			# TODO: this is so janky, needs to be reworked for sure
-			elif(event.unicode >= 32 and event.unicode <= 126):
-				if(INPUT_CHARACTERS_LIMIT < 0 or input.length() < INPUT_CHARACTERS_LIMIT):
-					_label_print(_ARRAY_CHARS[event.unicode-32])
-
-# [INPUT]
-# Flash the input cursor
-func _blink_input(reset = false):
-	if(reset == true):
-		if(_blink_input_visible):
-			_delete_last_character()
-		_blink_input_visible = false
-		_blink_input_timer = 0
-		return
-	if(_blink_input_visible):
-		_delete_last_character()
-		_blink_input_visible = false
-	else:
-		_blink_input_visible = true
-		_label_print("_")
-
-
-# [INPUT]
-# Used by the manual backspace handler, which is probably not staying
-func _delete_last_character(scrollup = false):
-	_label.set_bbcode(_label.get_bbcode().left(_label.get_bbcode().length()-1))
-
-
-# Not sure this is used any more...
-func _get_last_line():
-	var i = _label.get_bbcode().rfind("\n")
-	if (i == -1):
-		return _label.get_bbcode()
-	return _label.get_bbcode().substr(i,_label.get_bbcode().length()-i)
-
-
 # And here's the thing that actually puts text in the box!
 func _label_print(t): # Add text to the label
 	_label.set_bbcode(_label.get_bbcode() + t)
+
+	_label.set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
+	set_size(Vector2(_label.get_size().x, _label.get_v_scroll().get_max() + 30))
 	return t
